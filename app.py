@@ -4,7 +4,6 @@ import streamlit as st
 import requests
 import io
 import base64
-from huggingface_hub import hf_hub_download
 
 # Set page configuration
 st.set_page_config(

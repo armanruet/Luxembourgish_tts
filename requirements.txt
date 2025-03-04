@@ -1,0 +1,7 @@
+gradio>=3.41.2
+TTS==0.22.0
+numpy==1.22.0
+pandas<2.0,>=1.4
+scipy==1.8.1
+torch>=1.10
+torchaudio>=0.10.0 

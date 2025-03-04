@@ -1,0 +1,14 @@
+# Model files (too large for GitHub)
+*.pth
+
+# Gradio cache
+.gradio/
+.cache/
+
+# Generated audio files
+*.wav
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class 

@@ -1,9 +1,10 @@
 import os
 import tempfile
 import streamlit as st
-from TTS.utils.synthesizer import Synthesizer
-from huggingface_hub import hf_hub_download
+import requests
+import io
 import base64
+from huggingface_hub import hf_hub_download
 
 # Set page configuration
 st.set_page_config(
@@ -17,49 +18,8 @@ st.title("Luxembourgish Text-to-Speech Converter")
 st.markdown(
     "Enter text in Luxembourgish (or other supported languages) to convert to speech.")
 
-# Define the repository ID
-REPO_ID = "mbarnig/lb-de-fr-en-pt-coqui-vits-tts"
-
-# Define function to ensure model files are downloaded
-
-
-@st.cache_resource
-def load_synthesizer():
-    st.info("Initializing TTS model... This may take a minute on first run.")
-
-    # Create a models directory if it doesn't exist
-    os.makedirs("models", exist_ok=True)
-
-    # Define the files to download
-    files = [
-        "best_model.pth",
-        "config.json",
-        "speakers.pth",
-        "language_ids.json",
-        "model_se.pth",
-        "config_se.json"
-    ]
-
-    # Download each file if it doesn't exist
-    for file in files:
-        file_path = os.path.join("models", file)
-        if not os.path.exists(file_path):
-            with st.status(f"Downloading {file}..."):
-                hf_hub_download(
-                    repo_id=REPO_ID,
-                    filename=file,
-                    local_dir="models"
-                )
-
-    # Initialize the synthesizer
-    synthesizer = Synthesizer(
-        os.path.join("models", "best_model.pth"),
-        os.path.join("models", "config.json"),
-        use_cuda=False  # Set to True if you have a GPU
-    )
-
-    return synthesizer
-
+# Define the Hugging Face model ID
+HF_MODEL_ID = "mbarnig/lb-de-fr-en-pt-coqui-vits-tts"
 
 # Available speakers and languages
 SPEAKERS = ["Bernard", "Bunny", "Ed", "Guy",
@@ -72,8 +32,46 @@ LANGUAGES = {
     "Portuguese": "pt-br"
 }
 
-# Load the synthesizer
-synthesizer = load_synthesizer()
+# Create a sidebar for HF API token (optional)
+with st.sidebar:
+    st.subheader("Configuration")
+    hf_token = st.text_input("Hugging Face API Token (optional)", type="password",
+                             help="Enter your Hugging Face API token to increase rate limits")
+    st.write(
+        "If you don't have a token, the app will still work with limited requests.")
+    st.divider()
+    st.markdown("### About")
+    st.markdown(
+        "This app uses a VITS model fine-tuned for Luxembourgish language.")
+    st.markdown(
+        f"Model: [mbarnig/lb-de-fr-en-pt-coqui-vits-tts](https://huggingface.co/{HF_MODEL_ID})")
+
+# Function to generate speech using the Hugging Face Inference API
+
+
+def generate_speech(text, speaker, language, api_token=None):
+    API_URL = f"https://api-inference.huggingface.co/models/{HF_MODEL_ID}"
+    headers = {}
+    if api_token:
+        headers["Authorization"] = f"Bearer {api_token}"
+
+    # For custom TTS models, we need to provide the text, speaker, and language
+    payload = {
+        "inputs": text,
+        "parameters": {
+            "speaker": speaker,
+            "language": language
+        }
+    }
+
+    response = requests.post(API_URL, headers=headers, json=payload)
+
+    if response.status_code != 200:
+        raise Exception(
+            f"API request failed with status code {response.status_code}: {response.text}")
+
+    return response.content
+
 
 # Create the input form
 with st.form("tts_form"):
@@ -105,33 +103,31 @@ if submit_button and text_input:
             language_code = LANGUAGES[language]
 
             # Generate speech
-            wav = synthesizer.tts(
-                text_input,
-                speaker_name=speaker,
-                language_name=language_code
-            )
+            audio_bytes = generate_speech(
+                text_input, speaker, language_code, hf_token)
 
-            # Create a temporary file to save the audio
+            # Save to a temporary file
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as fp:
                 temp_filename = fp.name
-                synthesizer.save_wav(wav, temp_filename)
+                fp.write(audio_bytes)
 
             # Display audio
             st.audio(temp_filename)
 
             # Provide download button
-            with open(temp_filename, "rb") as file:
-                btn = st.download_button(
-                    label="Download audio",
-                    data=file,
-                    file_name=f"tts_output_{speaker}_{language}.wav",
-                    mime="audio/wav"
-                )
+            st.download_button(
+                label="Download audio",
+                data=audio_bytes,
+                file_name=f"tts_output_{speaker}_{language}.wav",
+                mime="audio/wav"
+            )
 
             st.success(
                 f"Speech generated successfully with {speaker}'s voice in {language}.")
     except Exception as e:
         st.error(f"Error generating speech: {str(e)}")
+        st.info(
+            "If you're seeing rate limit errors, try adding your Hugging Face API token in the sidebar.")
 
 # Examples section
 st.divider()
@@ -155,19 +151,19 @@ for i, (example_text, example_speaker, example_language) in enumerate(examples):
             try:
                 with st.spinner("Generating speech from example..."):
                     language_code = LANGUAGES[example_language]
-                    wav = synthesizer.tts(
-                        example_text,
-                        speaker_name=example_speaker,
-                        language_name=language_code
-                    )
+                    audio_bytes = generate_speech(
+                        example_text, example_speaker, language_code, hf_token)
 
+                    # Save to a temporary file
                     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as fp:
                         temp_filename = fp.name
-                        synthesizer.save_wav(wav, temp_filename)
+                        fp.write(audio_bytes)
 
                     st.audio(temp_filename)
             except Exception as e:
                 st.error(f"Error generating speech: {str(e)}")
+                st.info(
+                    "If you're seeing rate limit errors, try adding your Hugging Face API token in the sidebar.")
 
 # Footer
 st.divider()

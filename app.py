@@ -31,13 +31,22 @@ LANGUAGES = {
     "Portuguese": "pt-br"
 }
 
-# Create a sidebar for HF API token (optional)
+# Create a sidebar for HF API token (required)
 with st.sidebar:
-    st.subheader("Configuration")
-    hf_token = st.text_input("Hugging Face API Token (optional)", type="password",
-                             help="Enter your Hugging Face API token to increase rate limits")
-    st.write(
-        "If you don't have a token, the app will still work with limited requests.")
+    st.subheader("API Authentication")
+    st.warning("⚠️ This model requires authentication to use")
+
+    st.markdown("""
+    ### How to get a Hugging Face token:
+    1. Create a free account at [huggingface.co](https://huggingface.co/join)
+    2. Go to your [settings page](https://huggingface.co/settings/tokens)
+    3. Create a new token (read access is sufficient)
+    4. Copy and paste the token here
+    """)
+
+    hf_token = st.text_input(
+        "Hugging Face API Token (required)", type="password")
+
     st.divider()
     st.markdown("### About")
     st.markdown(
@@ -48,11 +57,13 @@ with st.sidebar:
 # Function to generate speech using the Hugging Face Inference API
 
 
-def generate_speech(text, speaker, language, api_token=None):
+def generate_speech(text, speaker, language, api_token):
+    if not api_token:
+        raise ValueError(
+            "A Hugging Face API token is required to use this model.")
+
     API_URL = f"https://api-inference.huggingface.co/models/{HF_MODEL_ID}"
-    headers = {}
-    if api_token:
-        headers["Authorization"] = f"Bearer {api_token}"
+    headers = {"Authorization": f"Bearer {api_token}"}
 
     # For custom TTS models, we need to provide the text, speaker, and language
     payload = {
@@ -65,12 +76,23 @@ def generate_speech(text, speaker, language, api_token=None):
 
     response = requests.post(API_URL, headers=headers, json=payload)
 
-    if response.status_code != 200:
+    if response.status_code == 401:
+        raise ValueError(
+            "Invalid Hugging Face API token. Please check your token and try again.")
+    elif response.status_code == 404:
+        raise ValueError(
+            f"Model '{HF_MODEL_ID}' not found. It may have been renamed or removed.")
+    elif response.status_code != 200:
         raise Exception(
             f"API request failed with status code {response.status_code}: {response.text}")
 
     return response.content
 
+
+# Warning if no token is provided
+if not hf_token:
+    st.warning(
+        "⚠️ Please enter your Hugging Face API token in the sidebar to use this app.")
 
 # Create the input form
 with st.form("tts_form"):
@@ -92,7 +114,8 @@ with st.form("tts_form"):
         language = st.selectbox("Language", list(LANGUAGES.keys()), index=0)
 
     # Submit button
-    submit_button = st.form_submit_button("Convert to Speech", type="primary")
+    submit_button = st.form_submit_button(
+        "Convert to Speech", type="primary", disabled=not hf_token)
 
 # Handle form submission
 if submit_button and text_input:
@@ -123,46 +146,47 @@ if submit_button and text_input:
 
             st.success(
                 f"Speech generated successfully with {speaker}'s voice in {language}.")
+    except ValueError as e:
+        st.error(str(e))
     except Exception as e:
         st.error(f"Error generating speech: {str(e)}")
         st.info(
-            "If you're seeing rate limit errors, try adding your Hugging Face API token in the sidebar.")
+            "Please check your Hugging Face API token and ensure you have access to this model.")
 
 # Examples section
-st.divider()
-st.subheader("Examples")
+if hf_token:
+    st.divider()
+    st.subheader("Examples")
 
-examples = [
-    ("Moien, wéi geet et dir?", "Judith", "Luxembourgish"),
-    ("Guten Tag, wie geht es Ihnen?", "Thorsten", "German"),
-    ("Bonjour, comment ça va?", "Kerstin", "French"),
-    ("Hello, how are you today?", "Guy", "English"),
-    ("Olá, como vai você?", "Linda", "Portuguese")
-]
+    examples = [
+        ("Moien, wéi geet et dir?", "Judith", "Luxembourgish"),
+        ("Guten Tag, wie geht es Ihnen?", "Thorsten", "German"),
+        ("Bonjour, comment ça va?", "Kerstin", "French"),
+        ("Hello, how are you today?", "Guy", "English"),
+        ("Olá, como vai você?", "Linda", "Portuguese")
+    ]
 
-for i, (example_text, example_speaker, example_language) in enumerate(examples):
-    with st.expander(f"Example {i+1}: {example_language}"):
-        st.write(f"**Text:** {example_text}")
-        st.write(f"**Speaker:** {example_speaker}")
-        st.write(f"**Language:** {example_language}")
+    for i, (example_text, example_speaker, example_language) in enumerate(examples):
+        with st.expander(f"Example {i+1}: {example_language}"):
+            st.write(f"**Text:** {example_text}")
+            st.write(f"**Speaker:** {example_speaker}")
+            st.write(f"**Language:** {example_language}")
 
-        if st.button(f"Try this example", key=f"example_{i}"):
-            try:
-                with st.spinner("Generating speech from example..."):
-                    language_code = LANGUAGES[example_language]
-                    audio_bytes = generate_speech(
-                        example_text, example_speaker, language_code, hf_token)
+            if st.button(f"Try this example", key=f"example_{i}"):
+                try:
+                    with st.spinner("Generating speech from example..."):
+                        language_code = LANGUAGES[example_language]
+                        audio_bytes = generate_speech(
+                            example_text, example_speaker, language_code, hf_token)
 
-                    # Save to a temporary file
-                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as fp:
-                        temp_filename = fp.name
-                        fp.write(audio_bytes)
+                        # Save to a temporary file
+                        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as fp:
+                            temp_filename = fp.name
+                            fp.write(audio_bytes)
 
-                    st.audio(temp_filename)
-            except Exception as e:
-                st.error(f"Error generating speech: {str(e)}")
-                st.info(
-                    "If you're seeing rate limit errors, try adding your Hugging Face API token in the sidebar.")
+                        st.audio(temp_filename)
+                except Exception as e:
+                    st.error(f"Error generating speech: {str(e)}")
 
 # Footer
 st.divider()

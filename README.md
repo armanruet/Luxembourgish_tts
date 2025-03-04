@@ -6,7 +6,8 @@ A web interface for Luxembourgish text-to-speech synthesis using a VITS model.
 
 - Support for multiple languages: Luxembourgish, German, French, English, and Portuguese
 - Multiple speaker voices
-- Simple web interface built with Gradio
+- Simple web interface built with Streamlit
+- Automatic model loading from Hugging Face Hub
 
 ## Installation
 
@@ -28,32 +29,37 @@ cd Luxembourgish_tts
 pip install -r requirements.txt
 ```
 
-3. Download the model files:
-```bash
-python download_model.py
-```
-
 ## Usage
 
 Run the web interface:
 
 ```bash
-python check.py
+streamlit run app.py
 ```
 
-The web interface will be available at http://127.0.0.1:7860
+The web interface will be available at http://localhost:8501
 
 ## Deployment
 
-This app can be deployed on:
+### Deploying to Streamlit Community Cloud
 
-- [Hugging Face Spaces](https://huggingface.co/spaces) (recommended)
-- [Streamlit](https://streamlit.io/)
-- Any server with Python support
+1. Push your code to GitHub
+2. Go to [Streamlit Community Cloud](https://streamlit.io/cloud)
+3. Sign in with your GitHub account
+4. Select your repository
+5. Choose the main branch and enter the path to your app file: `app.py`
+6. Click "Deploy"
+
+The app will automatically download all required model files from Hugging Face Hub on first launch. No need to upload large model files!
+
+### Other Deployment Options
+
+- [Hugging Face Spaces](https://huggingface.co/spaces) (also supports automatic model loading)
+- Any cloud provider with Python support (AWS, GCP, Azure, etc.)
 
 ## Model Information
 
-This project uses a VITS (Variational Inference with adversarial learning for end-to-end Text-to-Speech) model fine-tuned for Luxembourgish language.
+This project uses a VITS (Variational Inference with adversarial learning for end-to-end Text-to-Speech) model fine-tuned for Luxembourgish language. The model is hosted on Hugging Face Hub at [mbarnig/lb-de-fr-en-pt-coqui-vits-tts](https://huggingface.co/mbarnig/lb-de-fr-en-pt-coqui-vits-tts).
 
 ## License
 
